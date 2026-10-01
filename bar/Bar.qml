@@ -82,12 +82,18 @@ Scope {
   property bool powerMenuOpen: false
   property bool networkOpen: false
   property bool calendarOpen: false
+  property bool claudeUsageOpen: false
   property bool startMenuOpen: false
   property bool wallpaperPickerOpen: false
 
   IpcHandler {
     target: "startmenu"
     function toggle(): void { root.startMenuOpen = !root.startMenuOpen; }
+  }
+
+  IpcHandler {
+    target: "claudeusage"
+    function toggle(): void { root.claudeUsageOpen = !root.claudeUsageOpen; }
   }
 
   IpcHandler {
@@ -161,6 +167,13 @@ Scope {
     font: root.font
     open: root.wallpaperPickerOpen
     onCloseRequested: root.wallpaperPickerOpen = false
+  }
+
+  ClaudeUsagePopup {
+    theme: root.theme
+    font: root.font
+    open: root.claudeUsageOpen
+    onCloseRequested: root.claudeUsageOpen = false
   }
 
   PowerMenu {
@@ -765,7 +778,11 @@ Scope {
 
                   onClicked: (mouse) => {
                     if (mouse.button === Qt.LeftButton) {
-                      if (modelData.hasMenu) {
+                      // The Claude app's icon opens the usage popup; its own
+                      // menu stays on right-click.
+                      if (modelData.id.indexOf("Claude") === 0) {
+                        root.claudeUsageOpen = !root.claudeUsageOpen
+                      } else if (modelData.hasMenu) {
                         menuAnchor.open()
                       } else {
                         modelData.activate()
