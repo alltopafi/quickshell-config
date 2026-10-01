@@ -81,6 +81,15 @@ Singleton {
     readonly property color batteryWarning:  accentOrange
     readonly property color batteryCritical: accentRed
 
+    // Workspace pill fill for a workspace holding windows but not focused.
+    // Derived rather than hardcoded so it stays in step with whichever of the
+    // 206 themes is active: it sits partway from bgSurface toward
+    // accentPrimary, giving three visibly distinct steps.
+    readonly property color wsOccupied: Qt.rgba(
+        bgSurface.r + (accentPrimary.r - bgSurface.r) * 0.5,
+        bgSurface.g + (accentPrimary.g - bgSurface.g) * 0.5,
+        bgSurface.b + (accentPrimary.b - bgSurface.b) * 0.5)
+
     function hexToRgba(hex) {
         return "rgba(" + hex.toString().replace("#", "") + "ff)";
     }

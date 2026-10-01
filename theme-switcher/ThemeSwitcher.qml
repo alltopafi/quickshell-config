@@ -627,7 +627,7 @@ Scope {
                         Rectangle {
                             width: hintEnter.width + 8; height: 18; radius: 4; color: root.theme.bgSurface
                             Behavior on color { ColorAnimation { duration: 150 } }
-                            Text { id: hintEnter; anchors.centerIn: parent; text: "⏎"; color: root.theme.textMuted; font.pixelSize: 10; font.family: root.font }
+                            Text { id: hintEnter; anchors.centerIn: parent; text: "\uF0311"; color: root.theme.textMuted; font.pixelSize: 10; font.family: root.font }
                         }
                         Text { text: "select"; color: root.theme.textMuted; font.pixelSize: 10; font.family: root.font; anchors.verticalCenter: parent.verticalCenter }
                     }

@@ -7,11 +7,14 @@ import Quickshell.Services.SystemTray
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import "../start-menu"
 Scope {
   id: root
   property var theme: DefaultTheme {}
   property string font: "Hack Nerd Font"
   property bool barVisible: true
+  // Pill colour while hovered: surface tinted toward the accent so it is visible.
+  readonly property color hoverColor: Qt.tint(theme.bgSurface, Qt.rgba(theme.accentPrimary.r, theme.accentPrimary.g, theme.accentPrimary.b, 0.25))
 
   // MPRIS active player
   property var activePlayer: {
@@ -23,9 +26,148 @@ Scope {
     return players[0];
   }
 
+  // How many workspaces are always listed, regardless of whether they are in
+  // use. The rest only appear once you are on them or have a window open.
+  property int alwaysShowWorkspaces: 4
+
+  // Workspaces shown in the bar, as plain {id, focused, urgent, activate} so
+  // that synthesised and real workspaces look identical to the Repeater.
+  //
+  // Hyprland's default workspace_destroy_policy is "destroy": an empty
+  // workspace is removed the moment you leave it, so workspaces 1-4 do not
+  // reliably exist in Hyprland.workspaces. They are therefore generated here
+  // rather than filtered for. Switching to one is dispatched explicitly,
+  // which also creates it.
+  property var visibleWorkspaces: {
+    const byId = {};
+    const all = Hyprland.workspaces.values || [];
+    for (const w of all) {
+      // Skip special workspaces, which report a negative id.
+      if (typeof w.id === "number" && w.id > 0) byId[w.id] = w;
+    }
+
+    const current = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1;
+    const ids = Object.keys(byId).map(Number);
+    let maxId = root.alwaysShowWorkspaces;
+    for (const id of ids) if (id > maxId) maxId = id;
+
+    const out = [];
+    for (let id = 1; id <= maxId; id++) {
+      const w = byId[id];
+      const tops = w && w.toplevels && w.toplevels.values ? w.toplevels.values : null;
+      const occupied = tops !== null ? tops.length > 0 : false;
+
+      if (id > root.alwaysShowWorkspaces && id !== current && !occupied) continue;
+
+      out.push({
+        id: id,
+        focused: id === current,
+        urgent: !!(w && w.urgent),
+        occupied: occupied,
+        activate: w
+          ? function () { w.activate(); }
+          : function () { Hyprland.dispatch("hl.dsp.focus({workspace=" + id + "})"); }
+      });
+    }
+    return out;
+  }
+
   IpcHandler {
     target: "bar"
     function toggle(): void { root.barVisible = !root.barVisible; }
+  }
+
+  property bool statsOpen: false
+  property bool batteryOpen: false
+  property bool powerMenuOpen: false
+  property bool networkOpen: false
+  property bool calendarOpen: false
+  property bool startMenuOpen: false
+  property bool wallpaperPickerOpen: false
+
+  IpcHandler {
+    target: "startmenu"
+    function toggle(): void { root.startMenuOpen = !root.startMenuOpen; }
+  }
+
+  IpcHandler {
+    target: "stats"
+    function toggle(): void { root.statsOpen = !root.statsOpen; }
+  }
+
+  IpcHandler {
+    target: "battery"
+    function toggle(): void { root.batteryOpen = !root.batteryOpen; }
+  }
+
+  IpcHandler {
+    target: "calendar"
+    function toggle(): void { root.calendarOpen = !root.calendarOpen; }
+  }
+
+  IpcHandler {
+    target: "network"
+    function toggle(): void { root.networkOpen = !root.networkOpen; }
+  }
+
+  // "power" is what hyprland.lua's Super+Ctrl+P already called for.
+  IpcHandler {
+    target: "power"
+    function toggle(): void { root.powerMenuOpen = !root.powerMenuOpen; }
+  }
+
+  // Single instance for all monitors, unlike the per-screen bar windows below.
+  SystemStatsPopup {
+    theme: root.theme
+    font: root.font
+    open: root.statsOpen
+    onCloseRequested: root.statsOpen = false
+  }
+
+  BatteryPopup {
+    theme: root.theme
+    font: root.font
+    open: root.batteryOpen
+    onCloseRequested: root.batteryOpen = false
+  }
+
+  CalendarPopup {
+    theme: root.theme
+    font: root.font
+    open: root.calendarOpen
+    onCloseRequested: root.calendarOpen = false
+  }
+
+  NetworkMenu {
+    theme: root.theme
+    font: root.font
+    open: root.networkOpen
+    onCloseRequested: root.networkOpen = false
+  }
+
+  StartMenu {
+    theme: root.theme
+    font: root.font
+    open: root.startMenuOpen
+    onCloseRequested: root.startMenuOpen = false
+    onWallpaperPickerRequested: {
+      root.startMenuOpen = false;
+      root.wallpaperPickerOpen = true;
+    }
+  }
+
+  WallpaperPicker {
+    theme: root.theme
+    font: root.font
+    open: root.wallpaperPickerOpen
+    onCloseRequested: root.wallpaperPickerOpen = false
+  }
+
+  PowerMenu {
+    theme: root.theme
+    font: root.font
+    open: root.powerMenuOpen
+    onCloseRequested: root.powerMenuOpen = false
   }
 
   PwObjectTracker {
@@ -107,12 +249,41 @@ Scope {
           anchors.verticalCenter: parent.verticalCenter
           spacing: 8
 
+          // Start menu
+          Rectangle {
+            height: 24
+            width: 28
+            radius: 12
+            color: startMouse.containsMouse || root.startMenuOpen ? root.hoverColor : root.theme.bgSurface
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "Start menu"
+
+            Image {
+              anchors.centerIn: parent
+              width: 16
+              height: 16
+              source: "file:///usr/share/icons/cachyos.svg"
+              sourceSize.width: 32
+              sourceSize.height: 32
+              fillMode: Image.PreserveAspectFit
+            }
+
+            MouseArea {
+              id: startMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.startMenuOpen = !root.startMenuOpen
+            }
+          }
+
           // Time
           Rectangle {
             height: 24
             width: timeDate.width + 16
             radius: 12
-            color: root.theme.bgSurface
+            color: timeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
 
             Row {
               id: timeDate
@@ -143,6 +314,17 @@ Scope {
                 font.family: root.font
               }
             }
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "Date and time. Show calendar."
+
+            MouseArea {
+              id: timeMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.calendarOpen = !root.calendarOpen
+            }
           }
 
           // Workspaces
@@ -150,7 +332,7 @@ Scope {
             spacing: 4
 
             Repeater {
-              model: Hyprland.workspaces
+              model: root.visibleWorkspaces
 
               Rectangle {
                 id: wsPill
@@ -163,8 +345,12 @@ Scope {
                 width: modelData.focused ? 32 : 24
                 height: 24
                 radius: 12
+                // Three states: active (accent), occupied but not active
+                // (wsOccupied), and empty (bgSurface). Urgent blinking still
+                // wins over the occupied colour so it stays visible.
                 color: modelData.focused ? root.theme.accentPrimary :
-                       modelData.urgent && urgentBlink ? root.theme.accentRed : root.theme.bgSurface
+                       modelData.urgent && urgentBlink ? root.theme.accentRed :
+                       modelData.occupied ? root.theme.wsOccupied : root.theme.bgSurface
 
                 Behavior on color {
                   ColorAnimation { duration: 150 }
@@ -208,7 +394,7 @@ Scope {
             height: 24
             width: nowPlayingContent.width + 16
             radius: 12
-            color: root.theme.bgSurface
+            color: npMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
             visible: root.activePlayer !== null
 
             Accessible.role: Accessible.Button
@@ -251,6 +437,8 @@ Scope {
             }
 
             MouseArea {
+              id: npMouse
+              hoverEnabled: true
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
               onClicked: root.activePlayer.togglePlaying()
@@ -289,7 +477,7 @@ Scope {
             height: 24
             width: volContent.width + 12
             radius: 12
-            color: root.theme.bgSurface
+            color: volMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
 
             Accessible.role: Accessible.StaticText
             Accessible.name: {
@@ -337,6 +525,8 @@ Scope {
             }
 
             MouseArea {
+              id: volMouse
+              hoverEnabled: true
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
               acceptedButtons: Qt.LeftButton
@@ -358,7 +548,7 @@ Scope {
             height: 24
             width: brightContent.width + 12
             radius: 12
-            color: root.theme.bgSurface
+            color: brightMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
             visible: brightnessFile.path !== ""
 
             Accessible.role: Accessible.StaticText
@@ -387,6 +577,8 @@ Scope {
             }
 
             MouseArea {
+              id: brightMouse
+              hoverEnabled: true
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
               onWheel: (wheel) => {
@@ -413,12 +605,13 @@ Scope {
 
             // CPU
             Rectangle {
+              id: cpuPill
               height: 24
               width: cpuContent.width + 12
               radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "CPU: " + SystemInfo.cpuUsage
+              color: cpuMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+              Accessible.role: Accessible.Button
+              Accessible.name: "CPU: " + SystemInfo.cpuUsage + ". Show detailed system statistics."
 
               Row {
                 id: cpuContent
@@ -440,6 +633,14 @@ Scope {
                   font.family: root.font
                 }
               }
+
+              MouseArea {
+                id: cpuMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.statsOpen = !root.statsOpen
+              }
             }
 
             // Network
@@ -447,8 +648,8 @@ Scope {
               height: 24
               width: netContent.width + 12
               radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
+              color: netMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+              Accessible.role: Accessible.Button
               Accessible.name: {
                 if (SystemInfo.networkType === "ethernet") return "Network: Ethernet"
                 if (SystemInfo.networkType === "wifi") return "Network: WiFi " + SystemInfo.networkInfo
@@ -471,24 +672,25 @@ Scope {
                   font.pixelSize: 14
                   font.family: root.font
                 }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.networkInfo
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
+              }
+
+              MouseArea {
+                id: netMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.networkOpen = !root.networkOpen
               }
             }
-
             // Battery
             Rectangle {
+              id: battPill
               height: 24
               width: battContent.width + 12
               radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "Battery: " + SystemInfo.batteryLevel
+              color: battMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+              Accessible.role: Accessible.Button
+              Accessible.name: "Battery: " + SystemInfo.batteryLevel + ", " + SystemInfo.batteryStateText + ". Show battery and power details."
 
               Row {
                 id: battContent
@@ -510,36 +712,13 @@ Scope {
                   font.family: root.font
                 }
               }
-            }
 
-            // Temperature
-            Rectangle {
-              height: 24
-              width: tempContent.width + 12
-              radius: 12
-              color: root.theme.bgSurface
-              Accessible.role: Accessible.StaticText
-              Accessible.name: "Temperature: " + SystemInfo.temperature
-
-              Row {
-                id: tempContent
-                anchors.centerIn: parent
-                spacing: 6
-
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: "󰔏"
-                  color: root.theme.accentRed
-                  font.pixelSize: 14
-                  font.family: root.font
-                }
-                Text {
-                  anchors.verticalCenter: parent.verticalCenter
-                  text: SystemInfo.temperature
-                  color: root.theme.textPrimary
-                  font.pixelSize: 11
-                  font.family: root.font
-                }
+              MouseArea {
+                id: battMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.batteryOpen = !root.batteryOpen
               }
             }
           }
@@ -573,10 +752,24 @@ Scope {
                   Layout.preferredHeight: 24
 
                   acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+
+                  Rectangle {
+                    anchors.fill: parent
+                    radius: 12
+                    color: root.hoverColor
+                    visible: trayDelegate.containsMouse
+                    z: -1
+                  }
 
                   onClicked: (mouse) => {
                     if (mouse.button === Qt.LeftButton) {
-                      modelData.activate()
+                      if (modelData.hasMenu) {
+                        menuAnchor.open()
+                      } else {
+                        modelData.activate()
+                      }
                     } else if (mouse.button === Qt.RightButton) {
                       if (modelData.hasMenu) {
                         menuAnchor.open()
@@ -608,6 +801,42 @@ Scope {
                   }
                 }
               }
+            }
+          }
+
+          // Power menu
+          Rectangle {
+            id: powerBtn
+            implicitHeight: 24
+            implicitWidth: 24
+            radius: 12
+            color: powerMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "Power menu"
+
+            Behavior on color {
+              ColorAnimation { duration: 120 }
+            }
+
+            Text {
+              anchors.centerIn: parent
+              text: "󰐥"
+              color: powerMouse.containsMouse ? root.theme.accentRed : root.theme.textSecondary
+              font.pixelSize: 14
+              font.family: root.font
+
+              Behavior on color {
+                ColorAnimation { duration: 120 }
+              }
+            }
+
+            MouseArea {
+              id: powerMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.powerMenuOpen = !root.powerMenuOpen
             }
           }
         }

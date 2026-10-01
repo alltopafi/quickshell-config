@@ -8,6 +8,13 @@ QtObject {
   readonly property color bgSelected: "#283457"
   readonly property color bgBorder: "#32364a"
 
+  // Workspace pill fill for a workspace holding windows but not focused.
+  // Derived, not hardcoded, to match theme-switcher/Theme.qml.
+  readonly property color wsOccupied: Qt.rgba(
+    bgSurface.r + (accentPrimary.r - bgSurface.r) * 0.5,
+    bgSurface.g + (accentPrimary.g - bgSurface.g) * 0.5,
+    bgSurface.b + (accentPrimary.b - bgSurface.b) * 0.5)
+
   readonly property color textPrimary: "#c0caf5"
   readonly property color textSecondary: "#a9b1d6"
   readonly property color textMuted: "#565f89"

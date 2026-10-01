@@ -356,7 +356,7 @@ Scope {
             }
 
             Text {
-              text: "✕"
+              text: "\uF0156"
               color: root.theme.accentOrange
               font { pixelSize: 11; family: root.font }
               MouseArea {
@@ -449,7 +449,7 @@ Scope {
             }
 
             Text {
-              text: "✕"
+              text: "\uF0156"
               color: root.theme.accentRed
               font { pixelSize: 11; family: root.font }
               MouseArea {
