@@ -7,7 +7,9 @@ import Quickshell.Services.SystemTray
 import Quickshell.Io
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import Quickshell.Bluetooth
 import "../start-menu"
+import "../notifications"
 Scope {
   id: root
   property var theme: DefaultTheme {}
@@ -84,6 +86,9 @@ Scope {
   property bool calendarOpen: false
   property bool claudeUsageOpen: false
   property bool displayMenuOpen: false
+  property bool bluetoothOpen: false
+  property bool notificationsOpen: false
+  property bool bluetoothConnected: false
   property bool startMenuOpen: false
   property bool wallpaperPickerOpen: false
 
@@ -100,6 +105,16 @@ Scope {
   IpcHandler {
     target: "display"
     function toggle(): void { root.displayMenuOpen = !root.displayMenuOpen; }
+  }
+
+  IpcHandler {
+    target: "bluetooth"
+    function toggle(): void { root.bluetoothOpen = !root.bluetoothOpen; }
+  }
+
+  IpcHandler {
+    target: "notificationcenter"
+    function toggle(): void { root.notificationsOpen = !root.notificationsOpen; }
   }
 
   IpcHandler {
@@ -173,6 +188,20 @@ Scope {
     font: root.font
     open: root.wallpaperPickerOpen
     onCloseRequested: root.wallpaperPickerOpen = false
+  }
+
+  BluetoothMenu {
+    theme: root.theme
+    font: root.font
+    open: root.bluetoothOpen
+    onCloseRequested: root.bluetoothOpen = false
+  }
+
+  NotificationCenter {
+    theme: root.theme
+    font: root.font
+    open: root.notificationsOpen
+    onCloseRequested: root.notificationsOpen = false
   }
 
   DisplayMenu {
@@ -761,6 +790,49 @@ Scope {
               }
             }
 
+            // Bluetooth
+            Rectangle {
+              height: 24
+              width: 28
+              radius: 12
+              visible: Bluetooth.defaultAdapter !== null
+              color: btMouse.containsMouse || root.bluetoothOpen ? root.hoverColor : root.theme.bgSurface
+
+              readonly property bool powered: Bluetooth.defaultAdapter !== null && Bluetooth.defaultAdapter.enabled
+
+              Accessible.role: Accessible.Button
+              Accessible.name: "Bluetooth: " + (!powered ? "off" : root.bluetoothConnected ? "connected" : "on")
+
+              // Device property changes are not visible to a plain binding, so
+              // each device reports its own connected state here.
+              Repeater {
+                model: Bluetooth.devices
+                Item {
+                  required property var modelData
+                  readonly property bool conn: modelData.connected
+                  onConnChanged: root.bluetoothConnected = Bluetooth.devices.values.some(d => d.connected)
+                  Component.onCompleted: root.bluetoothConnected = Bluetooth.devices.values.some(d => d.connected)
+                }
+              }
+
+              Text {
+                anchors.centerIn: parent
+                text: String.fromCodePoint(!parent.powered ? 0xF00B2 : root.bluetoothConnected ? 0xF00B1 : 0xF00AF)
+                color: !parent.powered ? root.theme.textMuted
+                     : root.bluetoothConnected ? root.theme.accentPrimary : root.theme.textSecondary
+                font.pixelSize: 14
+                font.family: root.font
+              }
+
+              MouseArea {
+                id: btMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.bluetoothOpen = !root.bluetoothOpen
+              }
+            }
+
             // Network
             Rectangle {
               height: 24
@@ -838,6 +910,56 @@ Scope {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.batteryOpen = !root.batteryOpen
               }
+            }
+          }
+
+          // Notification center
+          Rectangle {
+            implicitHeight: 24
+            implicitWidth: 24
+            radius: 12
+            color: bellMouse.containsMouse || root.notificationsOpen ? root.hoverColor : root.theme.bgSurface
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "Notifications" + (NotificationService.doNotDisturb ? ", do not disturb" : NotificationService.unread > 0 ? ", " + NotificationService.unread + " unread" : "")
+
+            Text {
+              anchors.centerIn: parent
+              text: String.fromCodePoint(NotificationService.doNotDisturb ? 0xF009B : 0xF009A)
+              color: NotificationService.doNotDisturb ? root.theme.accentOrange : root.theme.textSecondary
+              font.pixelSize: 14
+              font.family: root.font
+            }
+
+            // Unread badge
+            Rectangle {
+              visible: NotificationService.unread > 0 && !NotificationService.doNotDisturb
+              anchors.right: parent.right
+              anchors.top: parent.top
+              anchors.rightMargin: -2
+              anchors.topMargin: -2
+              width: Math.max(14, badgeText.width + 6)
+              height: 14
+              radius: 7
+              color: root.theme.accentRed
+
+              Text {
+                id: badgeText
+                anchors.centerIn: parent
+                text: NotificationService.unread > 9 ? "9+" : NotificationService.unread
+                color: root.theme.bgBase
+                font.pixelSize: 9
+                font.family: root.font
+                font.bold: true
+              }
+            }
+
+            MouseArea {
+              id: bellMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.notificationsOpen = !root.notificationsOpen
             }
           }
 

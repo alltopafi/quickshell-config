@@ -12,6 +12,21 @@ Singleton {
     readonly property int count: notifications.length
     property int _seqCounter: 0
 
+    // Past notifications for the bar's notification center. The popups above
+    // only hold a notification while it is on screen; this outlives that.
+    property var history: []      // newest first: { appName, summary, body, urgency, time }
+    property int unread: 0
+    readonly property int historyLimit: 50
+
+    function removeFromHistory(entry): void {
+        root.history = root.history.filter(function(h) { return h !== entry; });
+    }
+
+    function clearHistory(): void {
+        root.history = [];
+        root.unread = 0;
+    }
+
     Component {
         id: notifDataComp
         NotificationData {}
@@ -32,6 +47,15 @@ Singleton {
                 && !notification.body && !notification.image) return;
 
             notification.tracked = true;
+
+            root.history = [{
+                appName: notification.appName || "",
+                summary: notification.summary || "",
+                body: notification.body || "",
+                urgency: notification.urgency,
+                time: Date.now()
+            }, ...root.history].slice(0, root.historyLimit);
+            root.unread += 1;
 
             const idStr = String(notification.id || "");
             if (idStr !== "") {
