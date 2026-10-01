@@ -14,7 +14,7 @@ Singleton {
     property var wallpaperTheme: ({})
     property string configFormat: "conf" // "conf" or "lua" — which hyprland.* is active
     property bool configFormatReady: false
-    property bool kdeIntegrationEnabled: Quickshell.env("QUICKSHELL_KDE_INTEGRATION") === "1"
+    property bool kdeIntegrationEnabled: Quickshell.env("QUICKSHELL_KDE_INTEGRATION") !== "0"
     property bool themesReady: false
 
     function tryLoadTheme() {
@@ -443,6 +443,8 @@ Singleton {
 
     FileView {
         id: themesFile
+        watchChanges: true
+        onFileChanged: reload()
         path: Quickshell.env("HOME") + "/.config/quickshell/theme-switcher/themes.json"
         onTextChanged: {
             const raw = themesFile.text();
