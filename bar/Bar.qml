@@ -83,6 +83,7 @@ Scope {
   property bool networkOpen: false
   property bool calendarOpen: false
   property bool claudeUsageOpen: false
+  property bool displayMenuOpen: false
   property bool startMenuOpen: false
   property bool wallpaperPickerOpen: false
 
@@ -94,6 +95,11 @@ Scope {
   IpcHandler {
     target: "claudeusage"
     function toggle(): void { root.claudeUsageOpen = !root.claudeUsageOpen; }
+  }
+
+  IpcHandler {
+    target: "display"
+    function toggle(): void { root.displayMenuOpen = !root.displayMenuOpen; }
   }
 
   IpcHandler {
@@ -167,6 +173,19 @@ Scope {
     font: root.font
     open: root.wallpaperPickerOpen
     onCloseRequested: root.wallpaperPickerOpen = false
+  }
+
+  DisplayMenu {
+    theme: root.theme
+    font: root.font
+    open: root.displayMenuOpen
+    brightnessValue: root.brightnessValue
+    hasBacklight: brightnessFile.path !== ""
+    onCloseRequested: root.displayMenuOpen = false
+    onBrightnessRequested: fraction => {
+      brightnessSetProc.command = ["brightnessctl", "set", Math.max(1, Math.round(fraction * 100)) + "%"];
+      brightnessSetProc.running = true;
+    }
   }
 
   ClaudeUsagePopup {
@@ -641,16 +660,15 @@ Scope {
             }
           }
 
-          // Brightness
+          // Displays: monitor list, scale and brightness
           Rectangle {
             height: 24
             width: brightContent.width + 12
             radius: 12
-            color: brightMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
-            visible: brightnessFile.path !== ""
+            color: brightMouse.containsMouse || root.displayMenuOpen ? root.hoverColor : root.theme.bgSurface
 
-            Accessible.role: Accessible.StaticText
-            Accessible.name: "Brightness: " + Math.round(root.brightnessValue * 100) + "%"
+            Accessible.role: Accessible.Button
+            Accessible.name: "Displays" + (brightnessFile.path !== "" ? ", brightness " + Math.round(root.brightnessValue * 100) + "%" : "")
 
             Row {
               id: brightContent
@@ -659,7 +677,7 @@ Scope {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "󰃠"
+                text: String.fromCodePoint(0xF0379)
                 color: root.theme.accentOrange
                 font.pixelSize: 14
                 font.family: root.font
@@ -667,6 +685,7 @@ Scope {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                visible: brightnessFile.path !== ""
                 text: Math.round(root.brightnessValue * 100) + "%"
                 color: root.theme.textPrimary
                 font.pixelSize: 11
@@ -679,6 +698,7 @@ Scope {
               hoverEnabled: true
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
+              onClicked: root.displayMenuOpen = !root.displayMenuOpen
               onWheel: (wheel) => {
                 brightnessSetProc.command = wheel.angleDelta.y > 0
                   ? ["brightnessctl", "set", "5%+"]
