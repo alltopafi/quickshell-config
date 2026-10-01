@@ -292,6 +292,44 @@ Scope {
     }
   }
 
+  // KDE Connect: "none" (no paired device), "offline" (paired, phone not
+  // reachable) or "connected". Polled because kdeconnect-cli has no watch mode.
+  property string kdeStatus: "none"
+  property string kdeDevice: ""
+
+  Process {
+    id: kdeProc
+    command: ["kdeconnect-cli", "-l"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        let status = "none", name = "";
+        for (const line of text.split("\n")) {
+          // "- Pixel 10 Pro XL: <id> on 192.168.1.79 via LAN (paired and reachable)"
+          const m = line.match(/^- (.+?): [0-9a-f]+ .*\((paired[^)]*)\)\s*$/);
+          if (!m) continue;
+          const reachable = m[2].indexOf("reachable") >= 0 && m[2].indexOf("not reachable") < 0;
+          if (reachable || status === "none") { status = reachable ? "connected" : "offline"; name = m[1]; }
+          if (reachable) break;
+        }
+        root.kdeStatus = status;
+        root.kdeDevice = name;
+      }
+    }
+  }
+
+  Timer {
+    interval: 10000
+    running: true
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: if (!kdeProc.running) kdeProc.running = true
+  }
+
+  Process {
+    id: kdeAppProc
+    command: ["kdeconnect-app"]
+  }
+
   Variants {
     model: Quickshell.screens
 
@@ -797,6 +835,34 @@ Scope {
                 root.popupAnchorX = mapToItem(null, width / 2, 0).x;
                 root.statsOpen = !root.statsOpen
               }
+              }
+            }
+
+            // KDE Connect
+            Rectangle {
+              height: 24
+              width: 28
+              radius: 12
+              visible: root.kdeStatus !== "none"
+              color: kdeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+
+              Accessible.role: Accessible.Button
+              Accessible.name: "KDE Connect: " + root.kdeDevice + (root.kdeStatus === "connected" ? " connected" : " not reachable")
+
+              Text {
+                anchors.centerIn: parent
+                text: String.fromCodePoint(root.kdeStatus === "connected" ? 0xF0121 : 0xF0122)
+                color: root.kdeStatus === "connected" ? root.theme.accentGreen : root.theme.textMuted
+                font.pixelSize: 14
+                font.family: root.font
+              }
+
+              MouseArea {
+                id: kdeMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (!kdeAppProc.running) kdeAppProc.running = true
               }
             }
 
