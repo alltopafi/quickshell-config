@@ -13,6 +13,9 @@ Scope {
   property bool open: false
   signal closeRequested
 
+  // Where the clicked bar button sits (window x); the popup hangs under it.
+  property real anchorX: 100000
+
   function close(): void { closeRequested(); }
 
   readonly property var now: Time.date
@@ -216,7 +219,7 @@ Scope {
 
     Rectangle {
       id: box
-      x: 12
+      x: Math.max(12, Math.min(parent.width - width - 12, root.anchorX - width / 2))
       y: 44
       width: 304
       height: 24 + layout.implicitHeight

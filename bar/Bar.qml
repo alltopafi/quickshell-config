@@ -86,6 +86,8 @@ Scope {
   property bool calendarOpen: false
   property bool claudeUsageOpen: false
   property bool displayMenuOpen: false
+  // Window x of the last bar button clicked; popups hang under it.
+  property real popupAnchorX: 100000
   property bool bluetoothOpen: false
   property bool notificationsOpen: false
   property bool bluetoothConnected: false
@@ -146,6 +148,7 @@ Scope {
   // Single instance for all monitors, unlike the per-screen bar windows below.
   SystemStatsPopup {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.statsOpen
     onCloseRequested: root.statsOpen = false
@@ -153,6 +156,7 @@ Scope {
 
   BatteryPopup {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.batteryOpen
     onCloseRequested: root.batteryOpen = false
@@ -160,6 +164,7 @@ Scope {
 
   CalendarPopup {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.calendarOpen
     onCloseRequested: root.calendarOpen = false
@@ -167,6 +172,7 @@ Scope {
 
   NetworkMenu {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.networkOpen
     onCloseRequested: root.networkOpen = false
@@ -192,6 +198,7 @@ Scope {
 
   BluetoothMenu {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.bluetoothOpen
     onCloseRequested: root.bluetoothOpen = false
@@ -199,6 +206,7 @@ Scope {
 
   NotificationCenter {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.notificationsOpen
     onCloseRequested: root.notificationsOpen = false
@@ -206,6 +214,7 @@ Scope {
 
   DisplayMenu {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.displayMenuOpen
     brightnessValue: root.brightnessValue
@@ -219,6 +228,7 @@ Scope {
 
   ClaudeUsagePopup {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.claudeUsageOpen
     onCloseRequested: root.claudeUsageOpen = false
@@ -226,6 +236,7 @@ Scope {
 
   PowerMenu {
     theme: root.theme
+    anchorX: root.popupAnchorX
     font: root.font
     open: root.powerMenuOpen
     onCloseRequested: root.powerMenuOpen = false
@@ -336,55 +347,6 @@ Scope {
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
               onClicked: root.startMenuOpen = !root.startMenuOpen
-            }
-          }
-
-          // Time
-          Rectangle {
-            height: 24
-            width: timeDate.width + 16
-            radius: 12
-            color: timeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
-
-            Row {
-              id: timeDate
-              anchors.centerIn: parent
-              spacing: 8
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: ""
-                color: root.theme.accentPrimary
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Time.timeString
-                color: root.theme.textPrimary
-                font.pixelSize: 12
-                font.family: root.font
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: Time.dateString
-                color: root.theme.textSecondary
-                font.pixelSize: 12
-                font.family: root.font
-              }
-            }
-
-            Accessible.role: Accessible.Button
-            Accessible.name: "Date and time. Show calendar."
-
-            MouseArea {
-              id: timeMouse
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.calendarOpen = !root.calendarOpen
             }
           }
 
@@ -507,22 +469,63 @@ Scope {
           }
         }
 
-        // Center section: Window Title (truly centered in bar)
+        // Center section: date and time (truly centered in bar)
         Item {
           anchors.centerIn: parent
           height: parent.height
           width: Math.max(0, parent.width - 2 * Math.max(leftSection.width, rightSection.width) - 32)
 
-          Text {
-            Accessible.role: Accessible.StaticText
-            Accessible.name: "Active window: " + text
-            text: Hyprland.activeToplevel ? Hyprland.activeToplevel.title : ""
-            color: root.theme.textPrimary
-            font.pixelSize: 13
-            font.family: root.font
-            elide: Text.ElideRight
-            width: Math.min(implicitWidth, parent.width)
+          // Date and time
+          Rectangle {
             anchors.centerIn: parent
+            height: 24
+            width: timeDate.width + 16
+            radius: 12
+            color: timeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+
+            Row {
+              id: timeDate
+              anchors.centerIn: parent
+              spacing: 8
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: ""
+                color: root.theme.accentPrimary
+                font.pixelSize: 14
+                font.family: root.font
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Time.timeString
+                color: root.theme.textPrimary
+                font.pixelSize: 12
+                font.family: root.font
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: Time.dateString
+                color: root.theme.textSecondary
+                font.pixelSize: 12
+                font.family: root.font
+              }
+            }
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "Date and time. Show calendar."
+
+            MouseArea {
+              id: timeMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.calendarOpen = !root.calendarOpen;
+              }
+            }
           }
         }
 
@@ -578,6 +581,7 @@ Scope {
                       // The Claude app's icon opens the usage popup; its own
                       // menu stays on right-click.
                       if (modelData.id.indexOf("Claude") === 0) {
+                        root.popupAnchorX = trayDelegate.mapToItem(null, trayDelegate.width / 2, 0).x
                         root.claudeUsageOpen = !root.claudeUsageOpen
                       } else if (modelData.hasMenu) {
                         menuAnchor.open()
@@ -727,7 +731,10 @@ Scope {
               hoverEnabled: true
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.displayMenuOpen = !root.displayMenuOpen
+              onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.displayMenuOpen = !root.displayMenuOpen
+              }
               onWheel: (wheel) => {
                 brightnessSetProc.command = wheel.angleDelta.y > 0
                   ? ["brightnessctl", "set", "5%+"]
@@ -786,7 +793,10 @@ Scope {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.statsOpen = !root.statsOpen
+                onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.statsOpen = !root.statsOpen
+              }
               }
             }
 
@@ -829,7 +839,10 @@ Scope {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.bluetoothOpen = !root.bluetoothOpen
+                onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.bluetoothOpen = !root.bluetoothOpen
+              }
               }
             }
 
@@ -869,7 +882,10 @@ Scope {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.networkOpen = !root.networkOpen
+                onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.networkOpen = !root.networkOpen
+              }
               }
             }
             // Battery
@@ -908,7 +924,10 @@ Scope {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.batteryOpen = !root.batteryOpen
+                onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.batteryOpen = !root.batteryOpen
+              }
               }
             }
           }
@@ -959,7 +978,10 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.notificationsOpen = !root.notificationsOpen
+              onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.notificationsOpen = !root.notificationsOpen
+              }
             }
           }
 
@@ -995,7 +1017,10 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.powerMenuOpen = !root.powerMenuOpen
+              onClicked: {
+                root.popupAnchorX = mapToItem(null, width / 2, 0).x;
+                root.powerMenuOpen = !root.powerMenuOpen
+              }
             }
           }
         }

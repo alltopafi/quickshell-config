@@ -13,6 +13,9 @@ Scope {
   property bool open: false
   signal closeRequested
 
+  // Where the clicked bar button sits (window x); the popup hangs under it.
+  property real anchorX: 100000
+
   function close(): void { closeRequested(); }
 
   // Glyphs (verified present in Hack Nerd Font): F05A9 md-wifi, F05AA md-wifi_off,
@@ -197,16 +200,12 @@ Scope {
     MouseArea {
       anchors.fill: parent
       onClicked: root.close()
-
-      Rectangle {
-        anchors.fill: parent
-        color: root.theme.bgOverlay
-      }
     }
 
     Rectangle {
       id: box
-      anchors.centerIn: parent
+      x: Math.max(12, Math.min(parent.width - width - 12, root.anchorX - width / 2))
+      y: 44
       width: 340
       height: 24 + layout.implicitHeight
       radius: 16

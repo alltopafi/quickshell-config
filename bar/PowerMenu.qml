@@ -15,6 +15,9 @@ Scope {
   property bool open: false
   signal closeRequested
 
+  // Where the clicked bar button sits (window x); the popup hangs under it.
+  property real anchorX: 100000
+
   function close(): void { closeRequested(); }
 
   // Two-step: the first click arms an action, the second one runs it. A stray
@@ -73,16 +76,12 @@ Scope {
         root.pending = "";
         root.close();
       }
-
-      Rectangle {
-        anchors.fill: parent
-        color: root.theme.bgOverlay
-      }
     }
 
     Rectangle {
       id: box
-      anchors.centerIn: parent
+      x: Math.max(12, Math.min(parent.width - width - 12, root.anchorX - width / 2))
+      y: 44
       width: 320
       height: 16 + layout.implicitHeight
       radius: 16
