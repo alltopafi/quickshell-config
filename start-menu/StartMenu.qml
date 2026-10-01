@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
@@ -15,14 +16,27 @@ Scope {
   signal wallpaperPickerRequested
 
   // Menu tree. An entry has either `submenu` (a key of `pages`) or `action`.
+  PowerActions { id: power }
+
+  // Power entries mirror the bar's power menu one-to-one.
+  readonly property var powerItems: power.actions.map(a => ({
+    key: a.key, label: a.label, icon: a.icon, hint: a.hint,
+    danger: a.danger, instant: !!a.instant, action: "power", cmd: a.cmd
+  }))
+
   readonly property var pages: ({
     root: { title: "Menu", items: [
-      { label: "Style", icon: String.fromCodePoint(0xF03D8), hint: "Appearance", submenu: "style" }
+      { label: "Style", icon: String.fromCodePoint(0xF03D8), hint: "Appearance", submenu: "style" },
+      { label: "Power", icon: String.fromCodePoint(0xF0425), hint: "Lock, log out, suspend, restart, shut down", submenu: "power" }
     ]},
     style: { title: "Style", items: [
       { label: "Wallpaper picker", icon: String.fromCodePoint(0xF0E09), hint: "Pick a wallpaper", action: "wallpaper" }
-    ]}
+    ]},
+    power: { title: "Power", items: root.powerItems }
   })
+
+  // Two-step like the bar's power menu: first activation arms, second runs.
+  property string pending: ""
 
   property string page: "root"
   property string query: ""
@@ -31,12 +45,14 @@ Scope {
   readonly property var results: Fuzzy.filter(pages[page].items, query, e => e.label)
 
   function reset(): void {
+    pending = "";
     page = "root";
     query = "";
     selected = 0;
   }
 
   function goBack(): void {
+    pending = "";
     if (page === "root") { closeRequested(); return; }
     page = "root";
     query = "";
@@ -51,10 +67,25 @@ Scope {
       selected = 0;
     } else if (entry.action === "wallpaper") {
       wallpaperPickerRequested();
+    } else if (entry.action === "power") {
+      if (entry.instant || pending === entry.key) {
+        pending = "";
+        closeRequested();
+        powerProc.command = entry.cmd;
+        powerProc.running = true;
+      } else {
+        pending = entry.key;
+      }
     }
   }
 
+  Process {
+    id: powerProc
+    running: false
+  }
+
   onOpenChanged: if (open) { reset(); Qt.callLater(() => searchInput.forceActiveFocus()); }
+  onSelectedChanged: pending = ""
   onResultsChanged: selected = Math.min(selected, Math.max(0, results.length - 1))
 
   PanelWindow {
@@ -186,11 +217,13 @@ Scope {
             required property var modelData
             required property int index
             readonly property bool current: index === root.selected
+            readonly property bool armed: root.pending === modelData.key
 
             Layout.fillWidth: true
             height: 36
             radius: 8
-            color: current ? root.theme.bgSelected : "transparent"
+            color: armed ? (modelData.danger ? root.theme.accentRed : root.theme.accentPrimary)
+                 : current ? root.theme.bgSelected : "transparent"
 
             Accessible.role: Accessible.Button
             Accessible.name: modelData.label
@@ -203,14 +236,15 @@ Scope {
 
               Text {
                 text: row.modelData.icon
-                color: root.theme.accentPrimary
+                color: row.armed ? root.theme.bgBase
+                     : row.modelData.danger ? root.theme.accentRed : root.theme.accentPrimary
                 font.pixelSize: 15
                 font.family: root.font
               }
               Text {
                 Layout.fillWidth: true
-                text: row.modelData.label
-                color: root.theme.textPrimary
+                text: row.armed ? "Press again to confirm" : row.modelData.label
+                color: row.armed ? root.theme.bgBase : root.theme.textPrimary
                 font.pixelSize: 13
                 font.family: root.font
               }

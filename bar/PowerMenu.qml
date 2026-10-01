@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
+import "../start-menu"
 
 Scope {
   id: root
@@ -20,26 +21,8 @@ Scope {
   // click on a power button should never be able to kill the session.
   property string pending: ""
 
-  // Codepoints verified against the installed font's own glyph names rather than
-  // guessed: F0343 md-logout, F0904 md-power_sleep, F0709 md-restart,
-  // F0902 md-power_off.
-  readonly property var actions: [
-    { key: "lock",     label: "Lock",      icon: String.fromCodePoint(0xF033E), danger: false, instant: true,
-      hint: "Lock the screen, keeping everything running",
-      cmd: ["sh", "-c", "pidof hyprlock >/dev/null || exec hyprlock"] },
-    { key: "logout",   label: "Log out",   icon: String.fromCodePoint(0xF0343), danger: false,
-      hint: "End this session and return to the login screen",
-      cmd: ["loginctl", "terminate-user", "alltopafi"] },
-    { key: "suspend",  label: "Suspend",   icon: String.fromCodePoint(0xF0904), danger: false,
-      hint: "Sleep, keeping this session in memory",
-      cmd: ["systemctl", "suspend"] },
-    { key: "restart",  label: "Restart",   icon: String.fromCodePoint(0xF0709), danger: true,
-      hint: "Reboot the machine",
-      cmd: ["systemctl", "reboot"] },
-    { key: "shutdown", label: "Shut down", icon: String.fromCodePoint(0xF0902), danger: true,
-      hint: "Power the machine off",
-      cmd: ["systemctl", "poweroff"] }
-  ]
+  PowerActions { id: power }
+  readonly property var actions: power.actions
 
   function actionFor(key) {
     for (const a of actions) if (a.key === key) return a;
