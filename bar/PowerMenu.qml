@@ -24,6 +24,9 @@ Scope {
   // guessed: F0343 md-logout, F0904 md-power_sleep, F0709 md-restart,
   // F0902 md-power_off.
   readonly property var actions: [
+    { key: "lock",     label: "Lock",      icon: String.fromCodePoint(0xF033E), danger: false, instant: true,
+      hint: "Lock the screen, keeping everything running",
+      cmd: ["sh", "-c", "pidof hyprlock >/dev/null || exec hyprlock"] },
     { key: "logout",   label: "Log out",   icon: String.fromCodePoint(0xF0343), danger: false,
       hint: "End this session and return to the login screen",
       cmd: ["loginctl", "terminate-user", "alltopafi"] },
@@ -46,7 +49,7 @@ Scope {
   // First click arms, second click on the same row runs it. Clicking anywhere
   // else (or esc) disarms.
   function choose(a) {
-    if (root.pending === a.key) {
+    if (a.instant || root.pending === a.key) {
       root.close();
       root.pending = "";
       powerProc.command = a.cmd;
