@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Widgets
 import QtQuick
 import QtQuick.Layouts
 import "fuzzy.js" as Fuzzy
@@ -24,14 +25,32 @@ Scope {
     danger: a.danger, instant: !!a.instant, action: "power", cmd: a.cmd
   }))
 
+  // Same list the Super+Space launcher shows, sorted by name.
+  readonly property var appItems: [...DesktopEntries.applications.values]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(d => ({
+      key: "app:" + d.id,
+      label: d.name,
+      hint: d.genericName || "",
+      icon: String.fromCodePoint(0xF08C6),
+      iconSource: d.icon ? Quickshell.iconPath(d.icon, true) : "",
+      action: "app",
+      entry: d,
+      // Extra text the launcher also searches: generic name, keywords, categories.
+      extras: [d.genericName || "", ...(d.keywords || []), ...(d.categories || [])].join(" ").toLowerCase()
+    }))
+
   readonly property var pages: ({
     root: { title: "Menu", items: [
+      { label: "Applications", icon: String.fromCodePoint(0xF003B), hint: "Installed applications", submenu: "apps" },
       { label: "Style", icon: String.fromCodePoint(0xF03D8), hint: "Appearance", submenu: "style" },
       { label: "Power", icon: String.fromCodePoint(0xF0425), hint: "Lock, log out, suspend, restart, shut down", submenu: "power" }
     ]},
     style: { title: "Style", items: [
-      { label: "Wallpaper picker", icon: String.fromCodePoint(0xF0E09), hint: "Pick a wallpaper", action: "wallpaper" }
+      { label: "Wallpaper picker", icon: String.fromCodePoint(0xF0E09), hint: "Pick a wallpaper", action: "wallpaper" },
+      { label: "Theme switcher", icon: String.fromCodePoint(0xF03D8), hint: "Colors, incl. Nerdfighter", action: "theme" }
     ]},
+    apps: { title: "Applications", items: root.appItems },
     power: { title: "Power", items: root.powerItems }
   })
 
@@ -42,7 +61,15 @@ Scope {
   property string query: ""
   property int selected: 0
 
-  readonly property var results: Fuzzy.filter(pages[page].items, query, e => e.label)
+  readonly property var results: {
+    const items = pages[page].items;
+    const byName = Fuzzy.filter(items, query, e => e.label);
+    if (page !== "apps" || query === "") return byName;
+    // Like the launcher, also match on generic name, keywords and categories.
+    const q = query.toLowerCase();
+    const seen = new Set(byName);
+    return [...byName, ...items.filter(e => !seen.has(e) && e.extras.indexOf(q) >= 0)];
+  }
 
   function reset(): void {
     pending = "";
@@ -65,8 +92,15 @@ Scope {
       page = entry.submenu;
       query = "";
       selected = 0;
+    } else if (entry.action === "app") {
+      closeRequested();
+      entry.entry.execute();
     } else if (entry.action === "wallpaper") {
       wallpaperPickerRequested();
+    } else if (entry.action === "theme") {
+      closeRequested();
+      themeProc.command = ["qs", "ipc", "call", "theme", "toggle"];
+      themeProc.running = true;
     } else if (entry.action === "power") {
       if (entry.instant || pending === entry.key) {
         pending = "";
@@ -81,6 +115,11 @@ Scope {
 
   Process {
     id: powerProc
+    running: false
+  }
+
+  Process {
+    id: themeProc
     running: false
   }
 
@@ -209,17 +248,30 @@ Scope {
           }
         }
 
-        Repeater {
+        ListView {
+          id: list
+          Layout.fillWidth: true
+          Layout.preferredHeight: Math.min(contentHeight, 380)
+          clip: true
+          spacing: 0
+          boundsBehavior: Flickable.StopAtBounds
           model: root.results
 
-          Rectangle {
+          // Keep the keyboard selection in view as it moves through a long list.
+          Connections {
+            target: root
+            function onSelectedChanged() { list.positionViewAtIndex(root.selected, ListView.Contain); }
+            function onPageChanged() { list.positionViewAtBeginning(); }
+          }
+
+          delegate: Rectangle {
             id: row
             required property var modelData
             required property int index
             readonly property bool current: index === root.selected
             readonly property bool armed: root.pending === modelData.key
 
-            Layout.fillWidth: true
+            width: list.width
             height: 36
             radius: 8
             color: armed ? (modelData.danger ? root.theme.accentRed : root.theme.accentPrimary)
@@ -234,12 +286,24 @@ Scope {
               anchors.rightMargin: 10
               spacing: 10
 
-              Text {
-                text: row.modelData.icon
-                color: row.armed ? root.theme.bgBase
-                     : row.modelData.danger ? root.theme.accentRed : root.theme.accentPrimary
-                font.pixelSize: 15
-                font.family: root.font
+              Item {
+                Layout.preferredWidth: 20
+                Layout.preferredHeight: 20
+
+                IconImage {
+                  anchors.fill: parent
+                  visible: !!row.modelData.iconSource
+                  source: row.modelData.iconSource || ""
+                }
+                Text {
+                  anchors.centerIn: parent
+                  visible: !row.modelData.iconSource
+                  text: row.modelData.icon
+                  color: row.armed ? root.theme.bgBase
+                       : row.modelData.danger ? root.theme.accentRed : root.theme.accentPrimary
+                  font.pixelSize: 15
+                  font.family: root.font
+                }
               }
               Text {
                 Layout.fillWidth: true
@@ -247,6 +311,7 @@ Scope {
                 color: row.armed ? root.theme.bgBase : root.theme.textPrimary
                 font.pixelSize: 13
                 font.family: root.font
+                elide: Text.ElideRight
               }
               Text {
                 visible: !!row.modelData.submenu
@@ -261,7 +326,9 @@ Scope {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onEntered: root.selected = row.index
+              // positionChanged, not entered: a list scrolling under a still
+              // mouse must not steal the keyboard selection.
+              onPositionChanged: root.selected = row.index
               onClicked: root.activate(row.modelData)
             }
           }
