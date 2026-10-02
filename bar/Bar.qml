@@ -660,6 +660,34 @@ Scope {
             }
           }
 
+          // KDE Connect
+          Rectangle {
+            height: 24
+            width: 28
+            radius: 12
+            visible: root.kdeStatus !== "none"
+            color: kdeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
+
+            Accessible.role: Accessible.Button
+            Accessible.name: "KDE Connect: " + root.kdeDevice + (root.kdeStatus === "connected" ? " connected" : " not reachable")
+
+            Text {
+              anchors.centerIn: parent
+              text: String.fromCodePoint(root.kdeStatus === "connected" ? 0xF0121 : 0xF0122)
+              color: root.kdeStatus === "connected" ? root.theme.accentGreen : root.theme.textMuted
+              font.pixelSize: 14
+              font.family: root.font
+            }
+
+            MouseArea {
+              id: kdeMouse
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onClicked: if (!kdeAppProc.running) kdeAppProc.running = true
+            }
+          }
+
           // Volume
           Rectangle {
             height: 24
@@ -835,34 +863,6 @@ Scope {
                 root.popupAnchorX = mapToItem(null, width / 2, 0).x;
                 root.statsOpen = !root.statsOpen
               }
-              }
-            }
-
-            // KDE Connect
-            Rectangle {
-              height: 24
-              width: 28
-              radius: 12
-              visible: root.kdeStatus !== "none"
-              color: kdeMouse.containsMouse ? root.hoverColor : root.theme.bgSurface
-
-              Accessible.role: Accessible.Button
-              Accessible.name: "KDE Connect: " + root.kdeDevice + (root.kdeStatus === "connected" ? " connected" : " not reachable")
-
-              Text {
-                anchors.centerIn: parent
-                text: String.fromCodePoint(root.kdeStatus === "connected" ? 0xF0121 : 0xF0122)
-                color: root.kdeStatus === "connected" ? root.theme.accentGreen : root.theme.textMuted
-                font.pixelSize: 14
-                font.family: root.font
-              }
-
-              MouseArea {
-                id: kdeMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: if (!kdeAppProc.running) kdeAppProc.running = true
               }
             }
 
