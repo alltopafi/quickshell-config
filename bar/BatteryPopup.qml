@@ -19,6 +19,8 @@ Scope {
 
   function close(): void { closeRequested(); }
 
+  onOpenChanged: if (open) SystemInfo.refreshBatteryCycles()
+
   readonly property bool onAC: SystemInfo.acSource !== ""
 
   // UPower: 0 = unknown, negative = effectively never.
@@ -290,6 +292,27 @@ Scope {
             Text {
               text: SystemInfo.batteryEnergy.toFixed(1) + " / "
                     + SystemInfo.batteryEnergyFull.toFixed(1) + " Wh"
+              color: root.theme.textPrimary
+              font.pixelSize: 12
+              font.family: root.font
+            }
+          }
+
+          // Charge cycles, when the pack reports them
+          RowLayout {
+            Layout.fillWidth: true
+            visible: SystemInfo.batteryCycles >= 0
+
+            Text {
+              text: "Charge cycles"
+              color: root.theme.textSecondary
+              font.pixelSize: 12
+              font.family: root.font
+              Layout.fillWidth: true
+            }
+
+            Text {
+              text: SystemInfo.batteryCycles
               color: root.theme.textPrimary
               font.pixelSize: 12
               font.family: root.font

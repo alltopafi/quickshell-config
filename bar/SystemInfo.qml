@@ -42,6 +42,29 @@ Singleton {
     }
   }
 
+  // Battery charge cycles, from the kernel's cycle_count. UPower reports the
+  // same number, but Quickshell's UPowerDevice does not expose it. -1 means the
+  // pack doesn't report one. It changes slowly, so it is read on demand
+  // (the battery popup calls refreshBatteryCycles() when it opens).
+  property int batteryCycles: -1
+
+  function refreshBatteryCycles(): void {
+    cyclesProc.running = true;
+  }
+
+  Process {
+    id: cyclesProc
+    command: ["sh", "-c", "for f in /sys/class/power_supply/BAT*/cycle_count; do [ -r \"$f\" ] && cat \"$f\" && break; done"]
+    running: true
+
+    stdout: StdioCollector {
+      onStreamFinished: {
+        const n = parseInt(text.trim());
+        root.batteryCycles = isNaN(n) ? -1 : n;
+      }
+    }
+  }
+
   // Battery
   // Read straight from UPower instead of polling /sys. The service pushes
   // property changes, so this costs no polling, and the bar pill and the
