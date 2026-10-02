@@ -4,9 +4,9 @@ import Quickshell.Wayland
 import QtQuick
 import QtQuick.Layouts
 
-// Shows Claude plan usage. The numbers come from the Claude Code status line,
-// which claude-usage/capture.sh saves to a cache file, so they are only as
-// fresh as your last Claude Code message.
+// Shows Claude plan usage. The numbers come from ~/Git/claude-usage/claude-usage.sh,
+// which prints JSON for the 5 hour and 7 day windows. It runs when the popup
+// opens and then once a minute while it stays open.
 Scope {
   id: root
   property var theme: DefaultTheme {}
@@ -21,20 +21,42 @@ Scope {
 
   function close(): void { closeRequested(); }
 
-  property var data: null          // { updated, rate_limits: { five_hour, seven_day } }
+  // Script that prints { five_hour: {...}, seven_day: {...} } (or { error }).
+  property string scriptPath: Quickshell.env("HOME") + "/Git/claude-usage/claude-usage.sh"
+
+  property var data: null          // parsed script output
+  property bool loading: false
+  property real updated: 0         // epoch seconds of the last good reading
   property real now: Date.now() / 1000
 
-  onOpenChanged: if (open) { now = Date.now() / 1000; usageFile.reload(); }
+  function refresh(): void {
+    if (usageProc.running) return;
+    loading = true;
+    usageProc.running = true;
+  }
 
-  FileView {
-    id: usageFile
-    path: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/quickshell/claude-usage.json"
-    watchChanges: true
-    onFileChanged: reload()
-    onLoaded: {
-      try { root.data = JSON.parse(text()); } catch (e) { root.data = null; }
+  onOpenChanged: {
+    if (!open) return;
+    now = Date.now() / 1000;
+    refresh();
+  }
+
+  Process {
+    id: usageProc
+    command: ["bash", root.scriptPath]
+    running: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.loading = false;
+        try {
+          root.data = JSON.parse(text);
+          if (!root.data.error) root.updated = Date.now() / 1000;
+        } catch (e) {
+          root.data = { error: "Could not read the usage script's output" };
+        }
+        root.now = Date.now() / 1000;
+      }
     }
-    onLoadFailed: root.data = null
   }
 
   // Keeps the countdowns moving while the popup is open.
@@ -45,6 +67,14 @@ Scope {
     onTriggered: root.now = Date.now() / 1000
   }
 
+  // Re-run the script while the popup is open so the numbers stay current.
+  Timer {
+    interval: 60000
+    running: root.open
+    repeat: true
+    onTriggered: root.refresh()
+  }
+
   function loadColor(pct) {
     if (pct >= 85) return root.theme.accentRed;
     if (pct >= 60) return root.theme.accentOrange;
@@ -52,8 +82,16 @@ Scope {
   }
 
   function window(key) {
-    const w = data && data.rate_limits ? data.rate_limits[key] : null;
-    return w && typeof w.used_percentage === "number" ? w : null;
+    const w = data && !data.error ? data[key] : null;
+    return w && typeof w.utilization_percent === "number" ? w : null;
+  }
+
+  function resetEpoch(w) {
+    return Date.parse(w.resets_at) / 1000;
+  }
+
+  function num(n) {
+    return Number(n).toLocaleString(Qt.locale(), "f", 0);
   }
 
   function duration(secs) {
@@ -141,8 +179,8 @@ Scope {
             readonly property var w: root.window(modelData.key)
             // A window past its reset time has been reset, but we have no new
             // reading for it until the next Claude Code message.
-            readonly property bool expired: w !== null && w.resets_at <= root.now
-            readonly property real pct: w !== null && !expired ? Math.min(100, w.used_percentage) : 0
+            readonly property bool expired: w !== null && root.resetEpoch(w) <= root.now
+            readonly property real pct: w !== null && !expired ? Math.min(100, w.utilization_percent) : 0
 
             Layout.fillWidth: true
             spacing: 6
@@ -182,21 +220,32 @@ Scope {
             Text {
               Layout.fillWidth: true
               text: win.w === null ? "No data for this window yet"
-                  : win.expired ? "Window has reset. Send a message in Claude Code to refresh."
-                  : "Resets in " + root.duration(win.w.resets_at - root.now) + "  (" + root.clock(win.w.resets_at) + ")"
+                  : win.expired ? "Window has reset. Reopen to refresh."
+                  : "Resets in " + root.duration(root.resetEpoch(win.w) - root.now) + "  (" + root.clock(root.resetEpoch(win.w)) + ")"
               color: root.theme.textMuted
               font.pixelSize: 10
               font.family: root.font
               wrapMode: Text.WordWrap
+            }
+
+            Text {
+              Layout.fillWidth: true
+              visible: win.w !== null && !win.expired
+              text: win.w === null ? "" : root.num(win.w.tokens_used) + " tokens used"
+                  + (win.w.tokens_remaining_estimated !== null && win.w.tokens_remaining_estimated !== undefined
+                     ? "  ·  ~" + root.num(win.w.tokens_remaining_estimated) + " left" : "")
+              color: root.theme.textMuted
+              font.pixelSize: 10
+              font.family: root.font
             }
           }
         }
 
         Text {
           Layout.fillWidth: true
-          text: root.data === null
-                ? "No usage recorded yet. It appears after your next Claude Code message (Pro or Max plan)."
-                : "Updated " + root.duration(root.now - root.data.updated) + " ago, from your last Claude Code message"
+          text: root.data && root.data.error ? root.data.error
+                : root.data === null ? (root.loading ? "Loading usage…" : "No usage data yet")
+                : "Updated " + root.duration(root.now - root.updated) + " ago" + (root.loading ? " · refreshing…" : "")
           color: root.theme.textMuted
           font.pixelSize: 10
           font.family: root.font
